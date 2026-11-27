@@ -682,10 +682,9 @@ impl App {
         if self.overlays.picker.index.covers(root, &extra) {
             self.overlays.picker.index.refresh();
         } else {
-            self.overlays.picker.index =
-                FileIndex::spawn_with(root, &extra, excludes, move || {
-                    let _ = proxy.send_event(UserEvent::Indexed);
-                });
+            self.overlays.picker.index = FileIndex::spawn_with(root, &extra, excludes, move || {
+                let _ = proxy.send_event(UserEvent::Indexed);
+            });
         }
     }
 }

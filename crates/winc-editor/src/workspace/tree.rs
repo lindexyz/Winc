@@ -873,7 +873,16 @@ fn flatten(
         if open {
             let inner = cached_children(cache, missing, &tail);
             let compact = (compact, compact);
-            flatten(cache, missing, expanded, excludes, compact, inner, Some(row), rows);
+            flatten(
+                cache,
+                missing,
+                expanded,
+                excludes,
+                compact,
+                inner,
+                Some(row),
+                rows,
+            );
             rows[row].end = rows.len();
         }
     }

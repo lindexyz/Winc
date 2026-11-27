@@ -14,7 +14,13 @@ pub(super) fn collect_all(
     cancel: &AtomicBool,
     excludes: &Excludes,
 ) -> Files {
-    with_parts(collect(root, limit, cancel, excludes), extra, limit, cancel, excludes)
+    with_parts(
+        collect(root, limit, cancel, excludes),
+        extra,
+        limit,
+        cancel,
+        excludes,
+    )
 }
 
 /// 把各部分 `parts`（路径前缀、目录）各自遍历后并入 `main`：部分中的路径以前缀加 `/` 开头；

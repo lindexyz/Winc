@@ -376,7 +376,13 @@ impl FileIndex {
         spawn(Box::new(move || {
             let files = match job {
                 Job::Walk => Some(Patched {
-                    files: Some(collect_all(&root, &extra, MAX_FILES, &worker_cancel, &excludes)),
+                    files: Some(collect_all(
+                        &root,
+                        &extra,
+                        MAX_FILES,
+                        &worker_cancel,
+                        &excludes,
+                    )),
                     missing: Vec::new(),
                 }),
                 Job::Patch(paths) => patch(&root, &base, &paths, &worker_cancel, &excludes),

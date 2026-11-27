@@ -31,9 +31,7 @@ impl Excludes {
             for pattern in patterns {
                 any |= builder.add_line(None, pattern).is_ok();
             }
-            if any
-                && let Ok(matcher) = builder.build()
-            {
+            if any && let Ok(matcher) = builder.build() {
                 built.push((root, matcher));
             }
         }
@@ -50,8 +48,11 @@ impl Excludes {
     /// 父目录被排除时其下的项同样排除。不在任何打开的目录下时不算排除。
     pub fn matched(&self, path: &Path, is_dir: bool) -> bool {
         self.roots.iter().any(|(root, matcher)| {
-            (path.strip_prefix(root))
-                .is_ok_and(|relative| matcher.matched_path_or_any_parents(relative, is_dir).is_ignore())
+            (path.strip_prefix(root)).is_ok_and(|relative| {
+                matcher
+                    .matched_path_or_any_parents(relative, is_dir)
+                    .is_ignore()
+            })
         })
     }
 
@@ -61,7 +62,9 @@ impl Excludes {
         (self.roots.iter())
             .find(|(dir, _)| dir == root)
             .is_some_and(|(_, matcher)| {
-                matcher.matched_path_or_any_parents(relative, is_dir).is_ignore()
+                matcher
+                    .matched_path_or_any_parents(relative, is_dir)
+                    .is_ignore()
             })
     }
 }
