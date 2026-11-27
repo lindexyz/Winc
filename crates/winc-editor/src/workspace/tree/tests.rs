@@ -971,3 +971,28 @@ fn revealing_after_a_fetch_selects_the_file_without_the_disk() {
 
     let _ = fs::remove_dir_all(&root);
 }
+
+/// 设置中的 `tree.exclude`：排除的目录和文件不出现在行中，父目录被排除时其下也不出现；取消
+/// 排除后又出现，目录缓存不必重新读。
+#[test]
+fn excluded_names_are_left_out_of_the_rows() {
+    let root = crate::test_util::scratch("ws-exclude");
+    fs::create_dir_all(root.join("dist/deep")).unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("dist/deep/app.js"), "").unwrap();
+    fs::write(root.join("src/main.rs"), "").unwrap();
+    fs::write(root.join("a.log"), "").unwrap();
+    let mut ws = Workspace::open(&root).unwrap();
+    let patterns = || ["dist/".to_owned(), "*.log".to_owned()];
+    ws.set_excludes(Arc::new(Excludes::new([root.clone()], &patterns())));
+
+    let names: Vec<String> = ws.rows().iter().map(|e| e.name.clone()).collect();
+    assert_eq!(names, ["src"]);
+
+    // 取消排除：内容都在缓存里，不必重新读目录。
+    ws.set_excludes(Arc::default());
+    let names: Vec<String> = ws.rows().iter().map(|e| e.name.clone()).collect();
+    assert_eq!(names, ["dist", "src", "a.log"]);
+
+    let _ = fs::remove_dir_all(&root);
+}

@@ -1,6 +1,7 @@
 //! 遍历规则的测试：名字的自然排序，查看变化了的路径。
 
 use super::*;
+use crate::Excludes;
 
 #[test]
 fn natural_order() {
@@ -49,7 +50,13 @@ fn changed_paths_are_probed_like_the_walk_sees_them() {
     sorted.sort_by(|a, b| Path::new(a).cmp(Path::new(b)));
     assert_eq!(sorted, paths);
 
-    let found = probe(&root, &paths[1..], Some(3), &AtomicBool::new(false));
+    let found = probe(
+        &root,
+        &paths[1..],
+        Some(3),
+        &Excludes::default(),
+        &AtomicBool::new(false),
+    );
     assert_eq!(found[0], Probe::Unlisted);
     assert_eq!(found[1], Probe::File);
     assert_eq!(found[2], Probe::Unlisted);
@@ -69,7 +76,13 @@ fn changed_paths_are_probed_like_the_walk_sees_them() {
     assert_eq!(found[5], Probe::Missing);
 
     // 根目录本身：全部收录的文件。
-    let whole = probe(&root, &paths[..1], None, &AtomicBool::new(false));
+    let whole = probe(
+        &root,
+        &paths[..1],
+        None,
+        &Excludes::default(),
+        &AtomicBool::new(false),
+    );
     let Probe::Dir { mut files, .. } = whole[0].clone() else {
         panic!("{whole:?}");
     };
@@ -118,6 +131,7 @@ fn ignored_repositories_below_a_folder_are_found() {
         dirs: vec![root.clone()],
         filter,
         ignored: false,
+        excludes: std::sync::Arc::default(),
     };
     let mut paths: Vec<PathBuf> = scope.paths(&AtomicBool::new(false)).collect();
     paths.sort();

@@ -3,6 +3,8 @@
 //! 拖动项目见 `tree_drag.rs`，工具栏按钮的收起动画见 `tool_fold.rs`；滚动时固定在顶部的各级目录
 //! 由 [`StickyRow`] 描述。
 
+use std::sync::Arc;
+
 use winc_editor::{EXPAND_DIRS, Workspace};
 use winc_i18n::t;
 
@@ -301,6 +303,29 @@ impl App {
             ws.set_compact(compact);
         }
         self.git.commit.set_compact(compact);
+        self.request_redraw();
+    }
+
+    /// 返回按设置和当前打开的目录编译好的排除规则（`tree.exclude`）。
+    ///
+    /// 规则相对于各个打开的目录，所以换了目录或加了附加目录时要重新编译。
+    pub(in crate::app) fn excludes(&self) -> Arc<winc_search::Excludes> {
+        let Some(ws) = &self.editor.workspace else {
+            return Arc::default();
+        };
+        let roots = ws.folders().map(|folder| folder.to_path_buf());
+        Arc::new(winc_search::Excludes::new(roots, &self.config.tree_exclude))
+    }
+
+    /// 按设置重新计算排除规则：文件树立即按新规则显示，快速打开的文件表和全局搜索在下次使用时
+    /// 重建。
+    pub(in crate::app) fn apply_tree_excludes(&mut self) {
+        let excludes = self.excludes();
+        if let Some(ws) = &mut self.editor.workspace {
+            ws.set_excludes(Arc::clone(&excludes));
+        }
+        self.overlays.picker.index = winc_editor::FileIndex::default();
+        self.panels.global.engine.set_excludes(excludes);
         self.request_redraw();
     }
 

@@ -6,7 +6,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 
 use winc_backend::remote::Stopper;
-use winc_search::Scope;
+use winc_search::{Excludes, Scope};
 
 use super::*;
 
@@ -35,6 +35,7 @@ impl ProjectSearch {
             source,
             dirty,
             run: Arc::clone(&run),
+            excludes: Arc::clone(&self.excludes),
             wake: Arc::clone(wake),
             last_wake: Mutex::new(None),
         };
@@ -108,6 +109,8 @@ pub(super) struct Walk {
     pub(super) source: Source,
     pub(super) dirty: Arc<HashMap<PathBuf, Rope>>,
     pub(super) run: Arc<Run>,
+    /// 用户排除的文件和目录（`tree.exclude`）。
+    pub(super) excludes: Arc<Excludes>,
     wake: Arc<dyn Fn() + Send + Sync>,
     /// 上一次唤醒界面线程的时刻；为 `None`（第一批结果）时立即唤醒。
     last_wake: Mutex<Option<Instant>>,
@@ -128,6 +131,7 @@ impl Walk {
                     dirs: local,
                     filter: filter.clone(),
                     ignored: *ignored,
+                    excludes: Arc::clone(&self.excludes),
                 },
                 self.tree_requests(&remote, *ignored),
             ),
@@ -185,6 +189,10 @@ impl Walk {
         lossy: bool,
         sender: &Sender<Message>,
     ) -> ControlFlow<()> {
+        // 远端主机上的搜索读不到本机的设置，其结果在本机按同样的规则过滤。
+        if self.excludes.matched(&path, false) {
+            return ControlFlow::Continue(());
+        }
         let flow = self.run.budget.take(&mut matches);
         if !matches.is_empty() {
             let relative = crate::workspace::tree::labelled_path(&self.root, &self.extra, &path);

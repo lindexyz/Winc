@@ -382,6 +382,7 @@ fn round_trips_through_json() {
         compact_folders: Some(false),
         preview_on_click: Some(true),
         tree_auto_reveal: Some(false),
+        tree_exclude: vec!["dist/".to_string(), "*.log".to_string()],
         external_terminal: Some("test-terminal".to_string()),
         vim_enabled: Some(true),
         vim_clipboard: Some(VimClipboard::Always),

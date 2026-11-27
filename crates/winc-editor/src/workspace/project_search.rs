@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, PoisonError, atomic::Ordering::Relaxed};
 use std::time::{Duration, Instant};
 
 use ropey::Rope;
-use winc_search::{Budget, Filter, Matcher, Searcher};
+use winc_search::{Budget, Excludes, Filter, Matcher, Searcher};
 pub use winc_search::{LineMatch, MAX_THREADS, Query};
 
 use crate::document::{Document, DocumentId};
@@ -115,6 +115,8 @@ pub struct ProjectSearch {
     extra: Vec<PathBuf>,
     /// 各个附加目录在相对路径中的前缀和目录，每次 [`Self::start`] 时确定。
     labelled: Arc<[(String, PathBuf)]>,
+    /// 用户排除的文件和目录（`tree.exclude`），其文件不搜索。
+    excludes: Arc<Excludes>,
     /// 按 `query` 编译好的匹配器，重新搜索个别文件时复用；查询为空或无法编译时为 `None`。
     matcher: Option<Matcher>,
     /// [`Self::start`] 收到的唤醒回调，后台重新搜索一批文件时同样使用；与 `matcher` 同时设置。
@@ -136,6 +138,11 @@ impl ProjectSearch {
     /// 工作区根目录，对附加的目录按文件名和完整路径匹配。
     pub fn set_extra_folders(&mut self, folders: Vec<PathBuf>) {
         self.extra = folders;
+    }
+
+    /// 设置用户排除的文件和目录（设置中的 `tree.exclude`），下一次 [`Self::start`] 起生效。
+    pub fn set_excludes(&mut self, excludes: Arc<Excludes>) {
+        self.excludes = excludes;
     }
 
     /// 按新条件从头搜索，旧的搜索作废。

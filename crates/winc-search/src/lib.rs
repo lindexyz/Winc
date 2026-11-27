@@ -5,6 +5,7 @@
 //! 一致。
 
 mod engine;
+mod exclude;
 mod file;
 pub mod host;
 mod lines;
@@ -15,6 +16,7 @@ pub mod text;
 mod walk;
 
 pub use engine::{Budget, MAX_THREADS, Scope, Searcher, search_parallel};
+pub use exclude::Excludes;
 pub use file::{
     BINARY_SNIFF, LARGE_FILE, LINE_CAP, OPEN_LIMIT, complete_prefix, looks_binary, visible_len,
 };

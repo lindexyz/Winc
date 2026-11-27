@@ -309,6 +309,7 @@ impl App {
         }
         let dirty = self.dirty_ropes();
         let proxy = self.link.proxy.clone();
+        let excludes = self.excludes();
         let d = &mut self.search_dialog;
         d.due = None;
         if d.query.text().is_empty() {
@@ -320,6 +321,7 @@ impl App {
                 }
             };
             let query = d.query_of();
+            d.engine.set_excludes(excludes);
             d.engine.set_extra_folders(extra);
             d.engine.start(&root, &query, dirty, wake);
         }

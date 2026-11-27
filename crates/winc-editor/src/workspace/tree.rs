@@ -8,8 +8,10 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use winc_i18n::t;
+use winc_search::Excludes;
 
 use super::copying::{self, Copying};
 
@@ -144,6 +146,8 @@ pub struct Workspace {
     expanded: HashSet<PathBuf>,
     /// 读过的目录内容，已排序。
     children: HashMap<PathBuf, Rc<[DirEntry]>>,
+    /// 用户排除的文件和目录（设置中的 `tree.exclude`），不在行中出现。
+    excludes: Arc<Excludes>,
     /// 需要显示、但当前线程不能等待读取的目录（见 [`Workspace::take_missing`]）。
     missing: Missing,
     /// 按展开状态拍平后的可见行。
@@ -248,6 +252,7 @@ impl Workspace {
             compact: true,
             expanded: HashSet::from([root]),
             children: HashMap::new(),
+            excludes: Arc::default(),
             missing: Missing {
                 deferring: later,
                 opening: later,
@@ -270,6 +275,13 @@ impl Workspace {
             self.compact = compact;
             self.rebuild();
         }
+    }
+
+    /// 设置用户排除的文件和目录（设置中的 `tree.exclude`）：它们不在行中出现，已展开的随之收起
+    /// 显示。目录缓存不变，取消排除后不必重新读目录。
+    pub fn set_excludes(&mut self, excludes: Arc<Excludes>) {
+        self.excludes = excludes;
+        self.rebuild();
     }
 
     /// 显示路径 `path` 的行的下标（合并显示时也算）；不在可见行里（没展开到那里、不在工作区里）
@@ -736,6 +748,7 @@ impl Workspace {
             &mut self.children,
             &mut self.missing,
             &self.expanded,
+            &self.excludes,
             (self.compact, top.1),
             top.0,
             None,
@@ -809,6 +822,7 @@ fn flatten(
     cache: &mut HashMap<PathBuf, Rc<[DirEntry]>>,
     missing: &mut Missing,
     expanded: &HashSet<PathBuf>,
+    excludes: &Excludes,
     (compact, merge): (bool, bool),
     children: Rc<[DirEntry]>,
     parent: Option<usize>,
@@ -817,6 +831,12 @@ fn flatten(
     let depth = parent.map_or(0, |p| rows[p].depth + 1);
 
     for index in 0..children.len() {
+        // 排除的项和它下面的内容都不出现：文件树问的是目录本身的种类，同名的文件不受
+        // `dist/` 这类模式影响。
+        let first = &children[index];
+        if excludes.matched(&first.path, first.kind == EntryKind::Dir) {
+            continue;
+        }
         let (mut siblings, mut at) = (Rc::clone(&children), index);
         let mut chain = vec![];
         while merge && siblings[at].kind == EntryKind::Dir && expanded.contains(&siblings[at].path)
@@ -830,6 +850,10 @@ fn flatten(
         }
         let tail = siblings[at].path.clone();
         let kind = siblings[at].kind;
+        // 合并显示的目录中最下面一级也可能被排除。
+        if excludes.matched(&tail, kind == EntryKind::Dir) {
+            continue;
+        }
         let chain = (!chain.is_empty()).then(|| {
             chain.push(tail.clone());
             Rc::from(chain)
@@ -849,7 +873,7 @@ fn flatten(
         if open {
             let inner = cached_children(cache, missing, &tail);
             let compact = (compact, compact);
-            flatten(cache, missing, expanded, compact, inner, Some(row), rows);
+            flatten(cache, missing, expanded, excludes, compact, inner, Some(row), rows);
             rows[row].end = rows.len();
         }
     }

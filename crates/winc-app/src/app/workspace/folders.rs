@@ -179,6 +179,8 @@ impl App {
     /// 布局。
     pub(in crate::app) fn folders_changed(&mut self) {
         self.watch_extra_folders();
+        // 排除规则相对于各个目录，加了或去掉了附加目录后要重新编译。
+        self.apply_tree_excludes();
         self.write_back_project();
         self.remember_workspace();
         self.git_discover();

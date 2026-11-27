@@ -3,9 +3,14 @@
 
 use super::*;
 
+/// 不带排除规则地遍历 `root`。
+fn collect(root: &Path, limit: usize, cancel: &AtomicBool) -> Files {
+    super::collect(root, limit, cancel, &Excludes::default())
+}
+
 /// 按变化的路径更新文件表，返回新表；表不需要变化时返回 `None`。
 fn updated(root: &Path, base: &Files, paths: &[PathBuf], cancel: &AtomicBool) -> Option<Files> {
-    patch(root, base, paths, cancel)
+    patch(root, base, paths, cancel, &Excludes::default())
         .expect("本机的目录总能查看")
         .files
 }
@@ -997,7 +1002,7 @@ fn opened_paths_share_the_picker_ranking_but_not_the_workspace_scan() {
         tracked.as_path(),
         outside.as_path(),
     ];
-    let mut idx = FileIndex::collect_now_with(&root, &[other]);
+    let mut idx = FileIndex::collect_now_with(&root, &[other], Arc::default());
     assert_eq!(idx.search_with_opened("env", opened.into_iter()).len(), 2);
     assert_eq!(idx.matches(), Some(2));
     assert_eq!(idx.quick_open_len(), idx.len() + 1);
@@ -1034,7 +1039,7 @@ fn extra_folders_are_indexed_under_their_name() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, "").unwrap();
     }
-    let idx = FileIndex::collect_now_with(&main, std::slice::from_ref(&other));
+    let idx = FileIndex::collect_now_with(&main, std::slice::from_ref(&other), Arc::default());
     let mut listed = paths(&idx);
     listed.sort_unstable();
     assert_eq!(listed, ["other/lib/b.rs", "readme.md", "src/a.rs"]);
@@ -1050,7 +1055,7 @@ fn extra_folders_are_indexed_under_their_name() {
     // 根目录下已有同名的项：前缀加上上级目录的名字，两者不混淆。
     std::fs::create_dir_all(main.join("other")).unwrap();
     std::fs::write(main.join("other/c.rs"), "").unwrap();
-    let idx = FileIndex::collect_now_with(&main, std::slice::from_ref(&other));
+    let idx = FileIndex::collect_now_with(&main, std::slice::from_ref(&other), Arc::default());
     let inner = idx.position_of(&main.join("other/c.rs")).unwrap();
     let outer = idx.position_of(&other.join("lib/b.rs")).unwrap();
     assert_eq!(idx.file(inner).unwrap().path, "other/c.rs");
@@ -1062,4 +1067,36 @@ fn extra_folders_are_indexed_under_their_name() {
         idx.absolute(inner).unwrap(),
         main.join("other").join("c.rs")
     );
+}
+
+/// 设置中的 `tree.exclude`：排除的文件和目录不收录，新建的变化也不因排除规则回到表里。
+#[test]
+fn excluded_files_stay_out_of_the_index() {
+    let root = std::env::temp_dir().join(format!("winc-picker-exclude-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("dist")).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("dist/app.js"), "").unwrap();
+    std::fs::write(root.join("src/main.rs"), "").unwrap();
+    std::fs::write(root.join("build.log"), "").unwrap();
+
+    let patterns = ["dist/".to_owned(), "*.log".to_owned()];
+    let excludes = Arc::new(Excludes::new([root.clone()], &patterns));
+    let idx = FileIndex::collect_now_with(&root, &[], Arc::clone(&excludes));
+    assert_eq!(paths(&idx), ["src/main.rs"]);
+
+    // 新建的文件同样按规则查看：表里没有它。
+    std::fs::write(root.join("later.log"), "").unwrap();
+    let patched = patch(
+        &root,
+        &idx.files,
+        &[root.join("later.log")],
+        &AtomicBool::new(false),
+        &excludes,
+    )
+    .expect("本机的目录总能查看")
+    .files;
+    assert!((patched).is_none_or(|files| files.position("later.log").is_none()));
+
+    let _ = std::fs::remove_dir_all(&root);
 }

@@ -42,6 +42,7 @@ impl App {
             || old.line_numbers != new.line_numbers
             || old.status_bar != new.status_bar;
         let compact = old.compact_folders != new.compact_folders;
+        let excludes = old.tree_exclude != new.tree_exclude;
         let diff_layout = old.diff_inline != new.diff_inline;
         let diff_collapse = old.diff_collapse_unchanged != new.diff_collapse_unchanged;
         let staging_view = old.git_staging_area != new.git_staging_area;
@@ -90,6 +91,9 @@ impl App {
         }
         if compact {
             self.apply_compact_folders();
+        }
+        if excludes {
+            self.apply_tree_excludes();
         }
         if diff_collapse {
             self.apply_diff_collapse();

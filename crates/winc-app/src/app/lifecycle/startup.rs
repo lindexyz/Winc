@@ -19,6 +19,11 @@ impl App {
             config.git_log_placement.unwrap_or_default() == winc_config::LogPlacement::Panel;
         if let Some(ws) = &mut editor.workspace {
             ws.set_compact(compact);
+            let excludes = std::sync::Arc::new(winc_search::Excludes::new(
+                ws.folders().map(|folder| folder.to_path_buf()),
+                &config.tree_exclude,
+            ));
+            ws.set_excludes(excludes);
         }
         // 启动时恢复的标签同样计入最近打开的文件，当前标签排在最前。
         let recent_files = {

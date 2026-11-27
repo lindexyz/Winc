@@ -4,11 +4,12 @@ use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
-use std::sync::{Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread;
 
 use winc_core::Lines;
 
+use crate::exclude::Excludes;
 use crate::lines::{LineMatch, search_lines};
 use crate::matcher::Matcher;
 use crate::query::Filter;
@@ -39,6 +40,8 @@ pub enum Scope {
         filter: Filter,
         /// 是否也搜索被 `.gitignore` 等规则忽略的文件。
         ignored: bool,
+        /// 用户排除的文件和目录（`tree.exclude`），不搜索。
+        excludes: Arc<Excludes>,
     },
     /// 只搜索这些目录下的依赖目录（见 [`dependency_folders`]），其中被忽略的文件也搜索。
     Dependencies(Vec<PathBuf>),
@@ -61,6 +64,7 @@ impl Scope {
                 dirs,
                 filter,
                 ignored,
+                excludes,
             } => Box::new(dirs.iter().flat_map(move |dir| {
                 let walk = move |root: &Path| {
                     let mut builder = if *ignored {
@@ -69,7 +73,9 @@ impl Scope {
                         walker(root)
                     };
                     builder.overrides(filter.pruning());
-                    files(builder).filter(|path| filter.includes(path))
+                    files(builder)
+                        .filter(|path| filter.includes(path))
+                        .filter(|path| !excludes.matched(path, false))
                 };
                 // 目录走完之后再找嵌套版本库，先给出的结果不必等待查找。
                 let nested = std::iter::once(*ignored).flat_map(move |ignored| {

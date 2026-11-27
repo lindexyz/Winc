@@ -10,7 +10,9 @@
 
 use std::io::{self, Read, Write};
 use std::ops::Range;
+use std::sync::Arc;
 
+use crate::exclude::Excludes;
 use crate::lines::LineMatch;
 use crate::query::Query;
 use crate::walk::Probe;
@@ -328,6 +330,7 @@ pub fn files(input: &[u8], output: &mut (dyn Write + Send)) -> io::Result<()> {
         root,
         &listing.paths,
         listing.layers,
+        &Excludes::default(),
         &AtomicBool::new(false),
     );
     let mut output = io::BufWriter::new(output);
@@ -405,6 +408,9 @@ pub fn serve(request: &Request, output: impl Write + Send) -> io::Result<()> {
             filter: Filter::new(&path(&request.root), &query.include, &query.exclude)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?,
             ignored,
+            // 远端的服务进程读不到本机的设置，排除规则只在本地生效；这里的远端结果随后由本机
+            // 的搜索界面按同样的规则过滤（见 `project_search`）。
+            excludes: Arc::new(Excludes::default()),
         },
         Mode::Dependencies => Scope::Dependencies(paths()),
         Mode::Files => Scope::Files(paths()),

@@ -17,6 +17,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 
 use winc_backend::remote::Exec;
+use winc_search::Excludes;
 use winc_search::Probe;
 use winc_search::host::{self, Listing};
 
@@ -287,6 +288,8 @@ pub struct FileIndex {
     rewalk: bool,
     /// 后台每完成一项工作调用一次，唤醒界面线程来取结果。
     wake: Option<Wake>,
+    /// 用户排除的文件和目录（`tree.exclude`），不收录。
+    excludes: Arc<Excludes>,
 }
 
 impl FileIndex {
@@ -295,20 +298,23 @@ impl FileIndex {
     /// 索引先为空；后台遍历完目录后把文件表放进通道，界面线程在 [`FileIndex::poll`] 中取出。
     /// 后台每完成一项工作（建好、按变化更新好）调用一次 `wake`，唤醒事件循环。
     pub fn spawn(root: &Path, wake: impl Fn() + Send + Sync + 'static) -> FileIndex {
-        FileIndex::spawn_with(root, &[], wake)
+        FileIndex::spawn_with(root, &[], Arc::default(), wake)
     }
 
     /// 开始为 `root` 和附加的目录 `extra` 建索引，其余同 [`FileIndex::spawn`]。
     ///
     /// 附加的目录中的文件的路径以该目录的名字开头；与根目录下的同名项冲突时加上上级目录的名字。
+    /// `excludes` 中的文件和目录不收录。
     pub fn spawn_with(
         root: &Path,
         extra: &[PathBuf],
+        excludes: Arc<Excludes>,
         wake: impl Fn() + Send + Sync + 'static,
     ) -> FileIndex {
         let mut index = FileIndex {
             root: Some(root.to_path_buf()),
             extra: extra_labels(root, extra),
+            excludes,
             wake: Some(Arc::new(wake)),
             ..FileIndex::default()
         };
@@ -318,17 +324,18 @@ impl FileIndex {
 
     /// 在当前线程同步建索引（测试用）。
     pub fn collect_now(root: &Path) -> FileIndex {
-        FileIndex::collect_now_with(root, &[])
+        FileIndex::collect_now_with(root, &[], Arc::default())
     }
 
     /// 在当前线程同步为 `root` 和附加的目录 `extra` 建索引（测试用）。
-    pub fn collect_now_with(root: &Path, extra: &[PathBuf]) -> FileIndex {
+    pub fn collect_now_with(root: &Path, extra: &[PathBuf], excludes: Arc<Excludes>) -> FileIndex {
         let cancel = AtomicBool::new(false);
         let extra = extra_labels(root, extra);
-        let files = collect_all(root, &extra, MAX_FILES, &cancel);
+        let files = collect_all(root, &extra, MAX_FILES, &cancel, &excludes);
         FileIndex {
             root: Some(root.to_path_buf()),
             extra,
+            excludes,
             files: Arc::new(files),
             ..FileIndex::default()
         }
@@ -357,6 +364,7 @@ impl FileIndex {
         let worker_cancel = Arc::clone(&cancel);
         let base = Arc::clone(&self.files);
         let extra = Arc::clone(&self.extra);
+        let excludes = Arc::clone(&self.excludes);
         let wake = self.wake.clone();
 
         // 远端的目录要等待网络，不占线程池中的线程。
@@ -368,10 +376,10 @@ impl FileIndex {
         spawn(Box::new(move || {
             let files = match job {
                 Job::Walk => Some(Patched {
-                    files: Some(collect_all(&root, &extra, MAX_FILES, &worker_cancel)),
+                    files: Some(collect_all(&root, &extra, MAX_FILES, &worker_cancel, &excludes)),
                     missing: Vec::new(),
                 }),
-                Job::Patch(paths) => patch(&root, &base, &paths, &worker_cancel),
+                Job::Patch(paths) => patch(&root, &base, &paths, &worker_cancel, &excludes),
             };
             // 发送失败说明界面一侧已不再需要结果，直接退出。
             if !worker_cancel.load(Ordering::Relaxed)

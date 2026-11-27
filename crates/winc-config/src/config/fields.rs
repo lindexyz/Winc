@@ -406,6 +406,28 @@ const TREE: &[Field] = &[
     bool_field!("compactFolders", compact_folders),
     bool_field!("previewOnClick", preview_on_click),
     bool_field!("autoReveal", tree_auto_reveal),
+    Field {
+        key: "exclude",
+        read: |config, value, name, problems| {
+            let Some(items) = value.as_array() else {
+                problems.push(t!("config-not-array", name = name));
+                return;
+            };
+            for item in items {
+                match item.as_str() {
+                    Some(pattern) if !pattern.trim().is_empty() => {
+                        config.tree_exclude.push(pattern.to_owned());
+                    }
+                    _ => problems.push(t!("config-item-not-non-empty-string", name = name)),
+                }
+            }
+        },
+        write: |config| {
+            let patterns = &config.tree_exclude;
+            (!patterns.is_empty())
+                .then(|| Json::Array(patterns.iter().cloned().map(Json::String).collect()))
+        },
+    },
 ];
 
 /// `markdown` 一节。

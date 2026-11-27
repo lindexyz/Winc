@@ -425,6 +425,7 @@ impl App {
     ///
     /// 未保存的文档按内存中的内容搜索。
     fn start_place_search(&mut self, mut search: DefinitionSearch, root: &Path, query: &Query) {
+        search.engine.set_excludes(self.excludes());
         search.engine.set_extra_folders(self.extra_folders());
         let dirty = self.dirty_ropes();
         let proxy = self.link.proxy.clone();

@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use ignore::WalkBuilder;
 
+use crate::exclude::Excludes;
+
 /// 文件树中不显示的目录和文件名（按名字精确匹配），快速打开的文件索引同样跳过。
 pub const HIDDEN: &[&str] = &[
     ".git",
@@ -157,12 +159,13 @@ pub enum Probe {
 /// 查看根目录 `root` 下变化了的各个路径（相对路径，以 `/` 分隔，按 [`Path`] 的顺序排好）现在的
 /// 样子；`layers` 是收录的层数（从 1 起，为 `None` 时不限），目录只收录到这一层。
 ///
-/// 是否收录按所在目录的忽略规则，与遍历时相同；空的相对路径是根目录本身。`cancel` 置位时提前
-/// 返回，结果不全。
+/// 是否收录按所在目录的忽略规则，与遍历时相同；`excludes` 中的文件和目录同样不收录。空的相对
+/// 路径是根目录本身。`cancel` 置位时提前返回，结果不全。
 pub fn probe(
     root: &Path,
     paths: &[String],
     layers: Option<usize>,
+    excludes: &Excludes,
     cancel: &AtomicBool,
 ) -> Vec<Probe> {
     // 各目录下收录的名字，同一目录里的多个变化只列一次。
@@ -197,13 +200,17 @@ pub fn probe(
                 .or_insert_with(|| listed_names(&root.join(parent)))
                 .contains(name);
         let kind = metadata.kind;
+        if !rel.is_empty() && excludes.matched_in(root, Path::new(rel), kind.is_dir()) {
+            found.push(Probe::Unlisted);
+            continue;
+        }
         found.push(if !allowed {
             Probe::Unlisted
         } else if is_listed_file(kind, &path) {
             Probe::File
         } else if kind.is_dir() {
             let (mut files, mut dirs) = (Vec::new(), Vec::new());
-            gather(root, rel, layers, (&mut files, &mut dirs), cancel);
+            gather(root, rel, layers, (&mut files, &mut dirs), excludes, cancel);
             gathered = Some(rel);
             Probe::Dir { files, dirs }
         } else {
@@ -234,6 +241,7 @@ pub fn gather(
     dir: &str,
     layers: Option<usize>,
     (files, dirs): (&mut Vec<String>, &mut Vec<String>),
+    excludes: &Excludes,
     cancel: &AtomicBool,
 ) {
     let depth = if dir.is_empty() {
@@ -269,9 +277,13 @@ pub fn gather(
             continue;
         };
         if is_listed_file(kind, entry.path()) {
-            files.push(path);
+            if !excludes.matched_in(root, Path::new(&path), false) {
+                files.push(path);
+            }
         } else if kind.is_dir() && layers.is_none_or(|layers| depth + entry.depth() < layers) {
-            dirs.push(path);
+            if !excludes.matched_in(root, Path::new(&path), true) {
+                dirs.push(path);
+            }
         }
     }
 }

@@ -12,8 +12,9 @@ pub(super) fn collect_all(
     extra: &[(String, PathBuf)],
     limit: usize,
     cancel: &AtomicBool,
+    excludes: &Excludes,
 ) -> Files {
-    with_parts(collect(root, limit, cancel), extra, limit, cancel)
+    with_parts(collect(root, limit, cancel, excludes), extra, limit, cancel, excludes)
 }
 
 /// 把各部分 `parts`（路径前缀、目录）各自遍历后并入 `main`：部分中的路径以前缀加 `/` 开头；
@@ -23,6 +24,7 @@ fn with_parts(
     parts: &[(String, PathBuf)],
     limit: usize,
     cancel: &AtomicBool,
+    excludes: &Excludes,
 ) -> Files {
     if parts.is_empty() {
         return main;
@@ -32,7 +34,7 @@ fn with_parts(
     let mut scratch = String::new();
     let mut failed = main.failed;
     for (label, folder) in parts {
-        let part = collect(folder, limit.saturating_sub(paths.len()), cancel);
+        let part = collect(folder, limit.saturating_sub(paths.len()), cancel, excludes);
         failed |= part.failed;
         dirs.push(label.clone());
         dirs.extend(part.dirs.iter().map(|dir| format!("{label}/{dir}")));
@@ -60,7 +62,12 @@ fn with_parts(
 /// 内容。不用深度优先：它要先走完一棵很深的子树，才知道浅层放不放得下。忽略规则与全局搜索相同
 /// （[`ignore::IncrementalIgnore`]），每列出 [`MATCHER_DIRS`] 个目录换一个匹配器以限制规则缓存
 /// （家目录能占一百多 MB）；只用一个线程，因为 macOS 的分配器不回收短命线程用过的内存。
-pub(super) fn collect(root: &Path, limit: usize, cancel: &AtomicBool) -> Files {
+pub(super) fn collect(
+    root: &Path,
+    limit: usize,
+    cancel: &AtomicBool,
+    excludes: &Excludes,
+) -> Files {
     if winc_backend::is_remote(root) {
         return collect_remote(root, limit, cancel);
     }
@@ -95,6 +102,7 @@ pub(super) fn collect(root: &Path, limit: usize, cancel: &AtomicBool) -> Files {
                 matcher.as_mut(),
                 &mut scratch,
                 (&mut files, &mut next, &mut nested),
+                excludes,
             );
             // 第 1 层自己就超过 `limit` 时也要列完，排序后收录前 `limit` 个。
             if depth > 1 && files.len() > limit {
@@ -123,7 +131,7 @@ pub(super) fn collect(root: &Path, limit: usize, cancel: &AtomicBool) -> Files {
             (rel, path)
         })
         .collect();
-    with_parts(table, &parts, limit, cancel)
+    with_parts(table, &parts, limit, cancel, excludes)
 }
 
 /// 列出 `dir`（相对路径）中不被忽略的文件和目录，相对路径分别放进 `files`、`dirs`；
@@ -136,6 +144,7 @@ fn list(
     matcher: Option<&mut ignore::IncrementalIgnore>,
     scratch: &mut String,
     (files, dirs, nested): (&mut Packed, &mut Packed, &mut Vec<String>),
+    excludes: &Excludes,
 ) {
     let Ok(entries) = winc_backend::fs::read_dir(root.join(dir)) else {
         return;
@@ -160,6 +169,12 @@ fn list(
             scratch.push('/');
         }
         scratch.push_str(name);
+        // 用户排除的项不收录，也不进去找嵌套的版本库。
+        if !excludes.is_empty()
+            && excludes.matched_in(root, Path::new(scratch.as_str()), kind.is_dir())
+        {
+            continue;
+        }
         if let Some(matcher) = matcher.as_deref_mut()
             && matcher.matched(scratch.as_str(), kind.is_dir()).is_ignore()
         {
@@ -196,10 +211,11 @@ pub(super) fn patch(
     base: &Files,
     paths: &[PathBuf],
     cancel: &AtomicBool,
+    excludes: &Excludes,
 ) -> Option<Patched> {
     let whole = |cancel| {
         Some(Patched {
-            files: Some(collect(root, MAX_FILES, cancel)),
+            files: Some(collect(root, MAX_FILES, cancel, excludes)),
             missing: Vec::new(),
         })
     };
@@ -232,7 +248,7 @@ pub(super) fn patch(
     }
     let probes = match winc_backend::is_remote(root) {
         true => probe_remote(root, &wanted, base.layers, cancel)?,
-        false => winc_search::probe(root, &wanted, base.layers, cancel),
+        false => winc_search::probe(root, &wanted, base.layers, excludes, cancel),
     };
     if cancel.load(Ordering::Relaxed) || probes.len() != wanted.len() {
         return None;

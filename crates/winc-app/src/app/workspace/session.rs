@@ -221,6 +221,7 @@ impl App {
         }
 
         self.apply_compact_folders();
+        self.apply_tree_excludes();
         if let Some(project) = &project {
             self.load_project(project);
         }

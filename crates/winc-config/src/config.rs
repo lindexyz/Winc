@@ -190,6 +190,9 @@ pub struct Config {
     pub preview_on_click: Option<bool>,
     /// 切换、打开文件时是否在文件树中展开并选中该文件；未设置时为是。
     pub tree_auto_reveal: Option<bool>,
+    /// 文件树、快速打开和全局搜索中不显示的文件和目录：`.gitignore` 写法的 glob，相对于各个
+    /// 打开的目录；为空时不排除。
+    pub tree_exclude: Vec<String>,
     /// 「在外部终端中打开」使用的终端程序；未设置时使用系统默认的终端程序。
     pub external_terminal: Option<String>,
     /// 是否开启 Vim 模式，默认为否。
