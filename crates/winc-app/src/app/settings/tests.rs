@@ -9,3 +9,16 @@ impl SettingsState {
         self.tool_row(Setting::FormatCommand(id))
     }
 }
+
+#[test]
+fn excludes_are_written_and_read_back_as_comma_separated_text() {
+    let patterns = ["dist/".to_owned(), "*.log".to_owned()];
+    assert_eq!(excludes_text(&patterns).as_deref(), Some("dist/, *.log"));
+    assert_eq!(excludes_text(&[]), None);
+
+    assert_eq!(
+        parse_excludes("dist/， *.log\n  !keep.log ,, "),
+        ["dist/", "*.log", "!keep.log"]
+    );
+    assert!(parse_excludes("  \n ").is_empty());
+}

@@ -209,7 +209,13 @@ impl SettingsPage {
                 group(t!("settings-group-opening"), vec![S::DropFolder]),
                 group(
                     t!("settings-group-sidebar"),
-                    vec![S::CompactFolders, S::AutoReveal, S::Outline, S::FindInFiles],
+                    vec![
+                        S::CompactFolders,
+                        S::TreeExclude,
+                        S::AutoReveal,
+                        S::Outline,
+                        S::FindInFiles,
+                    ],
                 ),
             ],
             SettingsPage::Markdown => vec![

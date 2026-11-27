@@ -71,7 +71,15 @@ jobs:
             > "$RUNNER_TEMP/build-config.json"
           cat "$RUNNER_TEMP/build-config.json"
 
+      # The AI endpoint is compiled into the binary from repository secrets, so the package works
+      # out of the box without pasting a key into the settings. `winc-config` reads these with
+      # `option_env!`; unset (or empty) variables leave the settings empty.
       - name: Compile
+        env:
+          WINC_AI_PROTOCOL: ${{ secrets.WINC_AI_PROTOCOL }}
+          WINC_AI_BASE_URL: ${{ secrets.WINC_AI_BASE_URL }}
+          WINC_AI_MODEL: ${{ secrets.WINC_AI_MODEL }}
+          WINC_AI_API_KEY: ${{ secrets.WINC_AI_API_KEY }}
         run: |
           cargo build --release --locked --target "$TARGET" -p winc -p winc-pty
           cargo xtask icons "target/$TARGET/release/bundle/icons"

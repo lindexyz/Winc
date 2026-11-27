@@ -827,6 +827,7 @@ impl App {
             None if setting == Setting::GitPath => self.config.git_path.clone(),
             None if setting == Setting::LatexPath => self.config.latex_path.clone(),
             None if setting == Setting::EditorRulers => rulers_text(&self.config.editor_rulers),
+            None if setting == Setting::TreeExclude => excludes_text(&self.config.tree_exclude),
             None if setting.is_ai_text() => ai_text(&mut self.config, setting).clone(),
             None => self.font_setting(setting).clone(),
         };
@@ -968,6 +969,7 @@ impl App {
                 self.set_latex_path(value);
             }
             None if setting == Setting::EditorRulers => self.settings_commit_rulers(value),
+            None if setting == Setting::TreeExclude => self.settings_commit_excludes(value),
             None if setting.is_ai_text() => {
                 self.settings.editing = None;
                 self.settings.editing_original = None;
@@ -1002,6 +1004,21 @@ impl App {
         if self.config.editor_rulers != columns {
             self.config.editor_rulers = columns;
             self.save_config();
+        }
+        self.request_redraw();
+    }
+
+    /// 提交排除规则（`tree.exclude`）并写回配置；清空表示不排除任何文件。
+    fn settings_commit_excludes(&mut self, value: Option<String>) {
+        let patterns = parse_excludes(value.as_deref().unwrap_or(""));
+        self.settings.editing = None;
+        self.settings.editing_original = None;
+        self.settings.error = None;
+        self.focus = Focus::Settings;
+        if self.config.tree_exclude != patterns {
+            self.config.tree_exclude = patterns;
+            self.save_config();
+            self.apply_tree_excludes();
         }
         self.request_redraw();
     }
@@ -1411,6 +1428,21 @@ fn ai_text(config: &mut Config, setting: Setting) -> &mut Option<String> {
 pub(crate) fn rulers_text(columns: &[usize]) -> Option<String> {
     let text: Vec<String> = columns.iter().map(usize::to_string).collect();
     (!text.is_empty()).then(|| text.join(", "))
+}
+
+/// 返回设置中显示的排除规则，例如「dist/, *.log」；没有排除任何文件时返回 `None`。
+pub(crate) fn excludes_text(patterns: &[String]) -> Option<String> {
+    (!patterns.is_empty()).then(|| patterns.join(", "))
+}
+
+/// 解析设置中输入的排除规则，各项以逗号、中文逗号或换行分隔，去掉空白和空项。
+fn parse_excludes(text: &str) -> Vec<String> {
+    let separator = |c: char| matches!(c, ',' | '，') || c == '\n';
+    (text.split(separator))
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// 解析设置中输入的长行参考线列号，按从小到大排列并去掉重复的列。

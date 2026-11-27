@@ -136,6 +136,8 @@ pub enum Setting {
     BackgroundOpacity,
     /// 文件树把连续的单子目录合并显示为一行。
     CompactFolders,
+    /// 文件树、快速打开和全局搜索中不显示的文件和目录（`tree.exclude`）。
+    TreeExclude,
     /// 切换、打开文件时在文件树中定位该文件。
     AutoReveal,
     /// 预览标签：在文件树中单击文件时在预览标签中打开。
@@ -364,9 +366,12 @@ impl Setting {
                 SettingsPage::Editor
             }
             S::VimRelativeNumber | S::VimYankHighlight | S::VimKey(_) => SettingsPage::Editor,
-            S::PreviewOnClick | S::DropFolder | S::CompactFolders | S::Outline | S::FindInFiles => {
-                SettingsPage::Files
-            }
+            S::PreviewOnClick
+            | S::DropFolder
+            | S::CompactFolders
+            | S::TreeExclude
+            | S::Outline
+            | S::FindInFiles => SettingsPage::Files,
             S::AutoReveal => SettingsPage::Files,
             S::MarkdownFont | S::MarkdownSize | S::TextWidth | S::MarkdownLineNumbers => {
                 SettingsPage::Markdown
@@ -475,6 +480,7 @@ impl Setting {
             S::BackgroundFit => "ui.backgroundFit",
             S::BackgroundOpacity => "ui.backgroundOpacity",
             S::CompactFolders => "tree.compactFolders",
+            S::TreeExclude => "tree.exclude",
             S::AutoReveal => "tree.autoReveal",
             S::PreviewOnClick => "tree.previewOnClick",
             S::RemoteImages => "markdown.remoteImages",
@@ -592,6 +598,7 @@ impl Setting {
             Setting::BackgroundOpacity => t!("settings-background-opacity"),
             Setting::Outline => t!("settings-outline"),
             Setting::CompactFolders => t!("settings-compact-folders"),
+            Setting::TreeExclude => t!("settings-tree-exclude"),
             Setting::AutoReveal => t!("settings-auto-reveal"),
             Setting::PreviewOnClick => t!("settings-preview-on-click"),
             Setting::RemoteImages => t!("settings-remote-images"),
@@ -712,6 +719,7 @@ impl Setting {
             Setting::WholeLines => Some(t!("settings-whole-lines-desc")),
             Setting::Outline => Some(t!("settings-outline-desc")),
             Setting::CompactFolders => Some(t!("settings-compact-folders-desc")),
+            Setting::TreeExclude => Some(t!("settings-tree-exclude-desc")),
             Setting::AutoReveal => Some(t!("settings-auto-reveal-desc")),
             Setting::PreviewOnClick => Some(t!("settings-preview-on-click-desc")),
             Setting::Minimap => Some(t!("settings-minimap-desc")),
@@ -880,6 +888,7 @@ impl Setting {
             | Setting::GitPath
             | Setting::LatexPath
             | Setting::EditorRulers
+            | Setting::TreeExclude
             | Setting::AiBaseUrl
             | Setting::AiModel
             | Setting::AiApiKey => SettingControl::Command,
@@ -926,7 +935,7 @@ impl Setting {
     pub fn is_text_field(self) -> bool {
         matches!(
             self,
-            Setting::GitPath | Setting::LatexPath | Setting::EditorRulers
+            Setting::GitPath | Setting::LatexPath | Setting::EditorRulers | Setting::TreeExclude
         ) || self.is_ai_text()
     }
 

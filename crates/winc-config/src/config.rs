@@ -547,6 +547,37 @@ impl AiProtocol {
     }
 }
 
+/// 打包时写入的默认模型接口（`WINC_AI_*` 环境变量，在编译时读取）。
+///
+/// 只有为自己构建、希望开箱就能用某个接口时才设置这些变量；普通构建为空，用户设置照旧。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AiDefaults {
+    /// 接口协议（`ai.protocol` 的写法，如 `chatCompletions`）。
+    pub protocol: Option<AiProtocol>,
+    /// 接口地址。
+    pub base_url: Option<String>,
+    /// 模型名。
+    pub model: Option<String>,
+    /// 密钥。
+    pub api_key: Option<String>,
+}
+
+/// 返回编译时由 `WINC_AI_*` 给出的默认接口设置；没有设置时各项为空。
+pub fn ai_defaults() -> AiDefaults {
+    let value = |text: Option<&'static str>| {
+        text.map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    AiDefaults {
+        protocol: value(option_env!("WINC_AI_PROTOCOL"))
+            .and_then(|key| (AiProtocol::ALL).into_iter().find(|p| p.key() == key)),
+        base_url: value(option_env!("WINC_AI_BASE_URL")),
+        model: value(option_env!("WINC_AI_MODEL")),
+        api_key: value(option_env!("WINC_AI_API_KEY")),
+    }
+}
+
 /// 日志和文件历史显示在哪里。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LogPlacement {
@@ -821,7 +852,11 @@ impl Config {
     pub fn load() -> (Config, Vec<String>) {
         match config_path() {
             Some(path) => Config::load_from(&path),
-            None => (Config::default(), Vec::new()),
+            None => {
+                let mut config = Config::default();
+                config.apply_ai_defaults();
+                (config, Vec::new())
+            }
         }
     }
 
@@ -829,14 +864,25 @@ impl Config {
     ///
     /// 文件不存在时返回默认值，不报告问题。
     pub fn load_from(path: &Path) -> (Config, Vec<String>) {
-        match std::fs::read_to_string(path) {
+        let (mut config, problems) = match std::fs::read_to_string(path) {
             Ok(text) => Config::parse(&text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Config::default(), Vec::new()),
             Err(e) => (
                 Config::default(),
                 vec![t!("config-read-failed", error = e.to_string())],
             ),
-        }
+        };
+        config.apply_ai_defaults();
+        (config, problems)
+    }
+
+    /// 把打包时的默认接口设置（见 [`ai_defaults`]）填进没有写过的项，用户写过的保留。
+    fn apply_ai_defaults(&mut self) {
+        let defaults = ai_defaults();
+        self.ai_protocol = self.ai_protocol.or(defaults.protocol);
+        self.ai_base_url = self.ai_base_url.take().or(defaults.base_url);
+        self.ai_model = self.ai_model.take().or(defaults.model);
+        self.ai_api_key = self.ai_api_key.take().or(defaults.api_key);
     }
 
     /// 解析配置文件内容，返回设置和所有无法理解的地方；任何输入都不会 panic。

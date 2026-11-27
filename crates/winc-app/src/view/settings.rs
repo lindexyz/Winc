@@ -744,6 +744,10 @@ fn draw_field(app: &mut App, frame: &mut Frame<'_>, row: &SettingRow, clip: Rect
             crate::app::rulers_text(&app.config.editor_rulers),
             t!("settings-editor-rulers-none"),
         ),
+        Setting::TreeExclude => (
+            crate::app::excludes_text(&app.config.tree_exclude),
+            t!("settings-tree-exclude-none"),
+        ),
         Setting::AiBaseUrl => (
             app.config.ai_base_url.clone(),
             t!("settings-ai-base-url-default"),
