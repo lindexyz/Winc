@@ -19,7 +19,7 @@ impl App {
             config.git_log_placement.unwrap_or_default() == winc_config::LogPlacement::Panel;
         if let Some(ws) = &mut editor.workspace {
             ws.set_compact(compact);
-            let excludes = std::sync::Arc::new(winc_search::Excludes::new(
+            let excludes = std::sync::Arc::new(winc_editor::Excludes::new(
                 ws.folders().map(|folder| folder.to_path_buf()),
                 &config.tree_exclude,
             ));

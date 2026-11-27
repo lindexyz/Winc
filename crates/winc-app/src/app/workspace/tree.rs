@@ -309,12 +309,12 @@ impl App {
     /// 返回按设置和当前打开的目录编译好的排除规则（`tree.exclude`）。
     ///
     /// 规则相对于各个打开的目录，所以换了目录或加了附加目录时要重新编译。
-    pub(in crate::app) fn excludes(&self) -> Arc<winc_search::Excludes> {
+    pub(in crate::app) fn excludes(&self) -> Arc<winc_editor::Excludes> {
         let Some(ws) = &self.editor.workspace else {
             return Arc::default();
         };
         let roots = ws.folders().map(|folder| folder.to_path_buf());
-        Arc::new(winc_search::Excludes::new(roots, &self.config.tree_exclude))
+        Arc::new(winc_editor::Excludes::new(roots, &self.config.tree_exclude))
     }
 
     /// 按设置重新计算排除规则：文件树立即按新规则显示，快速打开的文件表和全局搜索在下次使用时

@@ -963,7 +963,7 @@ fn changes_on_a_remote_host_are_patched_in_one_trip() {
     .map(|rel| winc_backend::join(&root, rel))
     .collect();
     let before = winc_backend::remote::requests(&target);
-    let patched = patch(&root, &base, &changed, &cancel).unwrap();
+    let patched = patch(&root, &base, &changed, &cancel, &Excludes::default()).unwrap();
     assert_eq!(winc_backend::remote::requests(&target) - before, 1);
     let table = patched.files.unwrap();
     assert_eq!(
@@ -979,7 +979,7 @@ fn changes_on_a_remote_host_are_patched_in_one_trip() {
     );
     assert_eq!(patched.missing, ["src/old.rs"]);
     // 只是内容变了：文件表不变。
-    let unchanged = patch(&root, &base, &changed[2..3], &cancel).unwrap();
+    let unchanged = patch(&root, &base, &changed[2..3], &cancel, &Excludes::default()).unwrap();
     assert!(unchanged.files.is_none() && unchanged.missing.is_empty());
     winc_backend::remote::disconnect(&target);
     let _ = std::fs::remove_dir_all(&local);

@@ -48,6 +48,8 @@ pub use editing::{paste, scopes};
 pub use navigation::bookmarks::{BookmarkMap, Bookmarks};
 pub use navigation::{bookmarks, definition, keypath, links, symbols, usages};
 pub use tools::{ai, format, host, http, latex, remote_env, shell, wsl};
+/// 用户排除的文件和目录（设置中的 `tree.exclude`），文件树、快速打开和全局搜索共用。
+pub use winc_search::Excludes;
 pub use workspace::copying::Copying;
 pub use workspace::picker::{FileIndex, IndexedFile, MAX_RESULTS as PICKER_MAX_RESULTS};
 pub use workspace::project_search::{

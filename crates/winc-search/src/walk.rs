@@ -276,14 +276,14 @@ pub fn gather(
         let Some(path) = entry.path().strip_prefix(root).ok().and_then(slashed) else {
             continue;
         };
-        if is_listed_file(kind, entry.path()) {
-            if !excludes.matched_in(root, Path::new(&path), false) {
-                files.push(path);
-            }
-        } else if kind.is_dir() && layers.is_none_or(|layers| depth + entry.depth() < layers) {
-            if !excludes.matched_in(root, Path::new(&path), true) {
-                dirs.push(path);
-            }
+        if is_listed_file(kind, entry.path()) && !excludes.matched_in(root, Path::new(&path), false)
+        {
+            files.push(path);
+        } else if kind.is_dir()
+            && layers.is_none_or(|layers| depth + entry.depth() < layers)
+            && !excludes.matched_in(root, Path::new(&path), true)
+        {
+            dirs.push(path);
         }
     }
 }
