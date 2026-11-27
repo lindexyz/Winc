@@ -818,6 +818,10 @@ fn sole_folder(children: &[DirEntry]) -> Option<&DirEntry> {
 /// `compact` 的第一项为真时，已展开的目录中唯一的一项也是目录时与它合并为一行；第二项是这一层
 /// 是否合并（各个文件夹自己的行不与其内容合并）。收起的目录不读取内容，因此不会访问磁盘去
 /// 判断能否合并。
+#[allow(
+    clippy::too_many_arguments,
+    reason = "拍平时同时读写这几处状态，借用分不开，打成结构体也不会更清楚"
+)]
 fn flatten(
     cache: &mut HashMap<PathBuf, Rc<[DirEntry]>>,
     missing: &mut Missing,
