@@ -1,0 +1,113 @@
+# Builds an installable Windows package from any commit without the signing and update secrets the
+# release workflows need: the installers are unsigned, and the app does not check for updates
+# (neither `WINC_UPDATE_CHANNELS` nor `WINC_UPDATE_PUBLIC_KEY` is set, so the update configuration
+# is left out of the binary). Artifacts are attached to the run.
+#
+# This workflow exists only in this fork; upstream builds unsigned packages from `release.yml` with
+# the real secrets.
+
+name: Build (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "VERSION"
+      - "rust-toolchain.toml"
+      - "release/**"
+      - ".github/workflows/fork-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  TARGET: x86_64-pc-windows-msvc
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the toolchain version
+        id: toolchain
+        run: |
+          version="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)"
+          [[ -n "$version" ]] || { echo "::error::rust-toolchain.toml names no channel"; exit 1; }
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+          targets: x86_64-pc-windows-msvc
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26.12.1"
+          package-manager-cache: false
+
+      # The build configuration normally comes from `release/common/config.mjs`, which needs the
+      # updater's private key. Without it the app simply does not check for updates.
+      - name: Build configuration without the updater
+        run: |
+          version="$(cat VERSION)"
+          core="${version%%-*}"
+          printf '{"version":"%s","msiVersion":"%s"}\n' "$version" "$core" \
+            > "$RUNNER_TEMP/build-config.json"
+          cat "$RUNNER_TEMP/build-config.json"
+
+      - name: Compile
+        run: |
+          cargo build --release --locked --target "$TARGET" -p winc -p winc-pty
+          cargo xtask icons "target/$TARGET/release/bundle/icons"
+
+      - name: Compile remote server
+        run: cargo xtask server
+
+      - name: Compile WSL file watcher
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --release --locked --target x86_64-unknown-linux-musl -p winc-watch
+
+      - name: Fetch console host
+        shell: pwsh
+        run: ./release/windows/conpty.ps1 -Destination "target/$env:TARGET/release"
+
+      - name: Install native packaging tools
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 --allow-downgrade --yes --no-progress
+          choco install wixtoolset --version=3.14.1 --allow-downgrade --yes --no-progress
+
+      - name: Bundle NSIS and MSI installers
+        run: pwsh -NoProfile -File release/windows/package.ps1 -Phase installers -Target "$TARGET"
+
+      - name: Package portable
+        shell: pwsh
+        run: ./release/windows/package.ps1 -Phase portable -Target "$TARGET"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: winc-windows-x64-unsigned
+          if-no-files-found: error
+          path: |
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            target/x86_64-pc-windows-msvc/release/bundle/portable/*.zip
