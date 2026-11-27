@@ -10,8 +10,10 @@
 
 use std::io::{self, Read, Write};
 use std::ops::Range;
+#[cfg(unix)]
 use std::sync::Arc;
 
+#[cfg(unix)]
 use crate::exclude::Excludes;
 use crate::lines::LineMatch;
 use crate::query::Query;

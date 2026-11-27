@@ -100,8 +100,7 @@ jobs:
         run: pwsh -NoProfile -File release/windows/package.ps1 -Phase installers -Target "$TARGET"
 
       - name: Package portable
-        shell: pwsh
-        run: ./release/windows/package.ps1 -Phase portable -Target "$TARGET"
+        run: pwsh -NoProfile -File release/windows/package.ps1 -Phase portable -Target "$TARGET"
 
       - uses: actions/upload-artifact@v7
         with:
